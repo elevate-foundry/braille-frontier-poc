@@ -144,6 +144,64 @@ def train_infinity(
             self.vocab.shadow_tokens.clear()
             return new_ids
     
+    def retokenize_with_contractions(sequences: torch.Tensor, vocab) -> torch.Tensor:
+        """
+        Re-encode sequences using discovered contractions.
+        This is the key to actually benefiting from contractions during training.
+        
+        Uses greedy longest-match replacement.
+        """
+        if not vocab.contractions:
+            return sequences
+        
+        # Sort contractions by length (longest first) for greedy matching
+        sorted_contractions = sorted(
+            vocab.contractions.items(),
+            key=lambda x: len(x[0]),
+            reverse=True
+        )
+        
+        new_sequences = []
+        original_len = sequences.shape[1]
+        
+        for seq in sequences:
+            tokens = seq.tolist()
+            # Remove padding for processing
+            non_pad = [t for t in tokens if t != 0]
+            
+            # Greedy replacement
+            i = 0
+            new_tokens = []
+            while i < len(non_pad):
+                matched = False
+                for pattern, token_id in sorted_contractions:
+                    plen = len(pattern)
+                    if i + plen <= len(non_pad):
+                        if tuple(non_pad[i:i+plen]) == pattern:
+                            new_tokens.append(token_id)
+                            i += plen
+                            matched = True
+                            break
+                if not matched:
+                    new_tokens.append(non_pad[i])
+                    i += 1
+            
+            # Pad back to original length (or truncate if somehow longer)
+            if len(new_tokens) < original_len:
+                new_tokens = new_tokens + [0] * (original_len - len(new_tokens))
+            else:
+                new_tokens = new_tokens[:original_len]
+            
+            new_sequences.append(new_tokens)
+        
+        return torch.tensor(new_sequences, dtype=sequences.dtype)
+    
+    def measure_compression(original: torch.Tensor, compressed: torch.Tensor) -> float:
+        """Calculate compression ratio (non-padding tokens)."""
+        orig_len = (original != 0).sum().item()
+        comp_len = (compressed != 0).sum().item()
+        return orig_len / comp_len if comp_len > 0 else 1.0
+    
     def build_mask_table(vocab, max_size):
         table = torch.zeros(max_size, 8)
         for i in range(256):
@@ -267,13 +325,21 @@ def train_infinity(
     # Load data
     print(f"\nLoading data from {data_path}...")
     data = torch.load(data_path)
-    input_ids = data["input_ids"]
-    target_ids = data["target_ids"]
-    print(f"  Sequences: {input_ids.shape[0]:,}")
-    print(f"  Context length: {input_ids.shape[1]}")
+    input_ids_original = data["input_ids"]
+    target_ids_original = data["target_ids"]
+    print(f"  Sequences: {input_ids_original.shape[0]:,}")
+    print(f"  Context length: {input_ids_original.shape[1]}")
     
-    dataset = TensorDataset(input_ids, target_ids)
-    dataloader = DataLoader(dataset, batch_size=64, shuffle=True, num_workers=4)
+    # Track current tokenization state
+    input_ids = input_ids_original.clone()
+    target_ids = target_ids_original.clone()
+    current_compression = 1.0
+    
+    def rebuild_dataloader(inp, tgt, batch_size=64):
+        ds = TensorDataset(inp, tgt)
+        return DataLoader(ds, batch_size=batch_size, shuffle=True, num_workers=4)
+    
+    dataloader = rebuild_dataloader(input_ids, target_ids)
     
     # Initialize vocabulary and model
     vocab = InfinityVocabulary(max_vocab_size=16384)
@@ -338,12 +404,21 @@ def train_infinity(
                     new_ids = model.miner.promote_top_k(k=50)
                     if new_ids and vocab.current_size > old_size:
                         model.expand_vocabulary(new_ids)
+                        
+                        # RE-TOKENIZE DATA WITH NEW CONTRACTIONS
+                        # This is the key to actually benefiting from contractions
+                        input_ids = retokenize_with_contractions(input_ids_original, vocab)
+                        target_ids = retokenize_with_contractions(target_ids_original, vocab)
+                        current_compression = measure_compression(input_ids_original, input_ids)
+                        dataloader = rebuild_dataloader(input_ids, target_ids)
+                        
                         expansion_history.append({
                             "step": global_step,
                             "new_tokens": len(new_ids),
                             "vocab_size": vocab.current_size,
+                            "compression": current_compression,
                         })
-                        print(f"  [Step {global_step}] Expanded vocab: +{len(new_ids)} NEW tokens -> {vocab.current_size} total")
+                        print(f"  [Step {global_step}] Expanded vocab: +{len(new_ids)} NEW tokens -> {vocab.current_size} total | Compression: {current_compression:.2f}x")
         
         scheduler.step()
         epoch_time = time.time() - epoch_start
@@ -356,7 +431,7 @@ def train_infinity(
             l1_gate = gates[:256].mean().item()
             l2_gate = gates[256:vocab.current_size].mean().item() if vocab.current_size > 259 else 0
         
-        print(f"Epoch {epoch+1:3d}/{epochs} | Loss: {avg_loss:.4f} | Vocab: {vocab.current_size} | L1 Gate: {l1_gate:.2f} | L2 Gate: {l2_gate:.2f} | Time: {epoch_time:.1f}s")
+        print(f"Epoch {epoch+1:3d}/{epochs} | Loss: {avg_loss:.4f} | Vocab: {vocab.current_size} | Compress: {current_compression:.2f}x | L1: {l1_gate:.2f} | L2: {l2_gate:.2f} | Time: {epoch_time:.1f}s")
         
         # Save best
         if avg_loss < best_loss:
@@ -383,6 +458,7 @@ def train_infinity(
     print(f"Best loss: {best_loss:.4f}")
     print(f"Final vocabulary: {vocab.current_size} tokens")
     print(f"  Layer 2 contractions: {len(vocab.contractions)}")
+    print(f"  Final compression: {current_compression:.2f}x")
     
     # Save final
     torch.save({
@@ -399,6 +475,7 @@ def train_infinity(
         "best_loss": best_loss,
         "final_vocab": vocab.current_size,
         "layer2_tokens": len(vocab.contractions),
+        "compression": current_compression,
         "time": total_time,
     }
 
@@ -412,4 +489,5 @@ def main(epochs: int = 100, expand_every: int = 1000, min_expand_step: int = 500
     print(f"Best loss: {result['best_loss']:.4f}")
     print(f"Final vocabulary: {result['final_vocab']} tokens")
     print(f"Layer 2 contractions: {result['layer2_tokens']}")
+    print(f"Compression ratio: {result['compression']:.2f}x")
     print(f"Total time: {result['time']/60:.1f} minutes")
