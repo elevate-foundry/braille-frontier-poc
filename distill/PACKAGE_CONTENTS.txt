@@ -1,0 +1,132 @@
+FRONTIER BRAILLE MODEL CORPUS - PACKAGE CONTENTS
+=================================================
+
+Core Files:
+-----------
+1. corpus_generator.py (29 KB)
+   - Main corpus generation engine
+   - BrailleEncoder: 8-dot Braille encoding (256 symbols)
+   - MorphologyEngine: Concatenative, agglutinative, fusional, templatic morphology
+   - EnglishStressor: Dialogue, instruction, logical, temporal, list stressors
+   - TurkishStressor: Multilingual injection
+   - AdversarialPerturbation: Surface perturbation layer
+   - FrontierBrailleCorpusGenerator: Main orchestrator
+
+2. generate_corpus.py (5.8 KB)
+   - Command-line interface for corpus generation
+   - Supports custom sample counts, seeds, and output directories
+   - Generates JSONL splits and statistics
+
+3. evaluation.py (15 KB)
+   - Corpus evaluation framework
+   - CorpusEvaluator: Analyzes held-out, morphological, stressor, and perturbation coverage
+   - EvaluationReportGenerator: Generates Markdown reports
+
+4. corpus_schema.json (8 KB)
+   - Complete metadata schema for corpus samples
+   - Defines all fields, types, and evaluation protocols
+   - Documents success criteria and anti-goals
+
+Documentation:
+---------------
+5. README.md (6 KB)
+   - Overview of corpus architecture
+   - Corpus splits and metadata schema
+   - Evaluation protocol description
+   - Usage instructions
+
+6. DESIGN.md (8 KB)
+   - Design philosophy and principles
+   - Detailed description of corpus components
+   - Corpus composition and anti-goals
+   - Success criteria and usage philosophy
+
+7. QUICKSTART.md (4 KB)
+   - Quick start guide for users
+   - Installation and basic usage
+   - Examples and troubleshooting
+
+8. setup.py (1.3 KB)
+   - Python package setup script
+   - Enables installation via pip
+
+Generated Files (Test Corpus):
+------------------------------
+test_corpus/train.jsonl (425 samples)
+test_corpus/eval_held_out.jsonl (0 samples)
+test_corpus/eval_variants.jsonl (139 samples)
+test_corpus/eval_adversarial.jsonl (75 samples)
+test_corpus/corpus_combined.jsonl (500 samples)
+test_corpus/corpus_stats.json (statistics)
+test_corpus/evaluation_report.md (evaluation report)
+test_corpus/evaluation_report.json (evaluation data)
+
+Key Features:
+=============
+
+1. Deterministic Generation
+   - Seedable random number generator
+   - Reproducible corpus generation
+   - Exact same corpus from same seed
+
+2. 8-Dot Braille Encoding
+   - 256 unique symbols (2^8)
+   - Deterministic hash-based mapping
+   - Foundational multimodal substrate
+
+3. Four Morphology Types
+   - Concatenative: prefix + root + suffix
+   - Agglutinative: linear stacks (Turkish-like)
+   - Fusional: merged features (Spanish-like)
+   - Templatic: non-concatenative (Arabic-like)
+
+4. Five English Stressor Types
+   - Dialogue: turn-taking, pronoun reference
+   - Instruction: procedural, conditional
+   - Logical: if/unless, negation scope
+   - Temporal: non-linear, flashbacks
+   - List: parallel structure, grouping
+
+5. Adversarial Perturbations
+   - Tokenization: merge/split words
+   - Punctuation: alter punctuation
+   - Entities: rename entities
+   - Phrase order: reorder phrases
+
+6. Held-Out Evaluation
+   - Unseen feature combinations
+   - Surface-perturbed variants
+   - Macro masking candidates
+   - Ablation test candidates
+
+Usage Workflow:
+===============
+
+1. Generate Corpus:
+   python3 generate_corpus.py --total-samples 10000 --output-dir ./corpus
+
+2. Explore Data:
+   head -1 corpus/train.jsonl | python3 -m json.tool
+
+3. Generate Report:
+   python3 evaluation.py corpus/corpus_combined.jsonl --output-report corpus/report.md
+
+4. Train Model:
+   Use corpus/train.jsonl as input
+
+5. Evaluate Model:
+   Use corpus/eval_*.jsonl for testing
+
+Success Criteria:
+=================
+
+The corpus is successful if it enables measurement of:
+
+1. Generalization: Learned contractions generalize across roots
+2. Robustness: Loss stays low on unseen combinations and perturbations
+3. Natural Compression: Compression plateaus without explosion or collapse
+
+If the corpus cannot falsify the hypothesis that the model is memorizing, it has failed.
+
+Version: 1.0.0
+Author: Manus AI

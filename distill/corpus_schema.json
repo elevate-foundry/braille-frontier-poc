@@ -1,0 +1,210 @@
+{
+  "corpus_metadata": {
+    "name": "Frontier Braille Model Corpus",
+    "version": "1.0.0",
+    "description": "ML-ready corpus for training dynamic-vocabulary, contraction-learning models on 8-dot Braille symbol space",
+    "objective": "Force discovery of operators and structure (not memorization) through controlled diversity, held-out generalization, and morphological stress tests",
+    "seed": 42,
+    "deterministic": true
+  },
+  "sample_schema": {
+    "id": {
+      "type": "string",
+      "description": "Unique identifier for the sample (format: category_counter)"
+    },
+    "source_category": {
+      "type": "string",
+      "enum": [
+        "synthetic_morphology",
+        "english_stressor",
+        "multilingual",
+        "adversarial"
+      ],
+      "description": "Primary source category of the sample"
+    },
+    "structural_type": {
+      "type": "string",
+      "description": "Specific structural type for evaluation (e.g., 'concatenative', 'dialogue_pronouns', 'agglutinative_past')"
+    },
+    "text": {
+      "type": "string",
+      "description": "The raw text content (not pre-tokenized or pre-contracted)"
+    },
+    "braille_encoding": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 255
+      },
+      "description": "8-dot Braille encoding of text (list of cell values 0-255)"
+    },
+    "held_out": {
+      "type": "boolean",
+      "description": "True if this sample is part of held-out evaluation split (not for training)"
+    },
+    "has_variants": {
+      "type": "boolean",
+      "description": "True if surface variants of this sample exist in the corpus"
+    },
+    "latent_structure": {
+      "type": ["string", "null"],
+      "description": "Latent structural annotation (for evaluation only, never fed to model)"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional metadata specific to the sample type",
+      "properties": {
+        "root": {
+          "type": "string",
+          "description": "Morphological root (for synthetic morphology)"
+        },
+        "features": {
+          "type": "object",
+          "description": "Feature bundle (for synthetic morphology)"
+        },
+        "stressor_type": {
+          "type": "string",
+          "description": "Type of English stressor (dialogue, instruction, logical, temporal, list)"
+        },
+        "language": {
+          "type": "string",
+          "description": "Language code (for multilingual)"
+        },
+        "parallel": {
+          "type": "object",
+          "description": "Parallel translations (for multilingual)"
+        },
+        "perturbation_type": {
+          "type": "string",
+          "description": "Type of perturbation applied (for adversarial)"
+        },
+        "base_sample_id": {
+          "type": "string",
+          "description": "ID of base sample before perturbation (for adversarial)"
+        },
+        "original_text": {
+          "type": "string",
+          "description": "Original text before perturbation (for adversarial)"
+        }
+      }
+    }
+  },
+  "corpus_splits": {
+    "train": {
+      "description": "Training split (all non-held-out samples)",
+      "constraint": "held_out == false"
+    },
+    "eval_held_out": {
+      "description": "Held-out evaluation split (unseen feature combinations or structures)",
+      "constraint": "held_out == true"
+    },
+    "eval_variants": {
+      "description": "Evaluation split for surface re-encoding tests",
+      "constraint": "has_variants == true"
+    },
+    "eval_adversarial": {
+      "description": "Adversarial evaluation split (perturbed samples)",
+      "constraint": "source_category == 'adversarial'"
+    }
+  },
+  "morphology_types": {
+    "concatenative": {
+      "description": "Prefix + root + suffix (e.g., un-happy-ness)",
+      "test_goal": "Verify model learns prefix/suffix attachment and composition"
+    },
+    "agglutinative": {
+      "description": "Long linear stacks of transparent morphemes (e.g., Turkish ev-ler-in-de)",
+      "test_goal": "Verify model learns consistent morpheme order and stacking"
+    },
+    "fusional": {
+      "description": "Merged feature realizations in single allomorph (e.g., Spanish habl-o, habl-as)",
+      "test_goal": "Verify model learns feature fusion and allomorphic variation"
+    },
+    "templatic": {
+      "description": "Non-concatenative: consonantal root + vowel template (e.g., Arabic k-t-b + CaCaC)",
+      "test_goal": "Verify model learns non-local binding and template-based composition"
+    }
+  },
+  "english_stressor_types": {
+    "dialogue": {
+      "description": "Turn-taking with pronoun reference and ellipsis",
+      "test_goal": "Verify model learns discourse structure and anaphora"
+    },
+    "instruction": {
+      "description": "Procedural text with imperative mood, ordered steps, conditionals",
+      "test_goal": "Verify model learns procedural ordering and conditional scope"
+    },
+    "logical": {
+      "description": "Logical/conditional text with if/unless, negation scope, counterfactuals",
+      "test_goal": "Verify model learns logical operators and scope interactions"
+    },
+    "temporal": {
+      "description": "Temporally reordered narratives with flashbacks and inversions",
+      "test_goal": "Verify model learns temporal structure independent of surface order"
+    },
+    "list": {
+      "description": "Lists and tables rendered as parallel text",
+      "test_goal": "Verify model learns parallel structure and implicit grouping"
+    }
+  },
+  "perturbation_types": {
+    "tokenization": {
+      "description": "Alter token boundaries (merge/split words)",
+      "test_goal": "Verify model doesn't rely on n-gram shortcuts"
+    },
+    "punctuation": {
+      "description": "Alter punctuation while preserving structure",
+      "test_goal": "Verify model learns structure independent of punctuation"
+    },
+    "entities": {
+      "description": "Rename entities consistently",
+      "test_goal": "Verify model learns structure independent of entity identity"
+    },
+    "phrase_order": {
+      "description": "Reorder phrases while preserving equivalence",
+      "test_goal": "Verify model learns meaning independent of surface order"
+    }
+  },
+  "evaluation_protocol": {
+    "macro_masking": {
+      "description": "Mask learned contractions and measure loss increase",
+      "hypothesis": "If model learned operators, loss should increase predictably"
+    },
+    "held_out_composition": {
+      "description": "Measure loss on unseen feature combinations",
+      "hypothesis": "If model learned structure, loss should be lower than random baseline"
+    },
+    "surface_reencoding": {
+      "description": "Measure loss on perturbed variants",
+      "hypothesis": "If model learned structure, loss should be stable across perturbations"
+    },
+    "ablation_tests": {
+      "description": "Remove specific morpheme types and measure impact",
+      "hypothesis": "Impact should correlate with morpheme frequency and generality"
+    }
+  },
+  "success_criteria": {
+    "criterion_1": "Learned contractions generalize across roots (not memorized)",
+    "criterion_2": "Contractions survive macro ablation tests",
+    "criterion_3": "Contractions reduce sequence length without memorization",
+    "criterion_4": "Loss stays low on unseen feature combinations",
+    "criterion_5": "Loss stays low on surface-perturbed variants",
+    "criterion_6": "Compression plateaus naturally without vocab explosion",
+    "criterion_7": "Compression doesn't collapse to a few macros"
+  },
+  "anti_goals": {
+    "avoid_1": "Do not scrape the open web blindly",
+    "avoid_2": "Do not include large factual corpora (Wikipedia, books)",
+    "avoid_3": "Do not optimize for perplexity",
+    "avoid_4": "Do not pre-tokenize or pre-contract",
+    "avoid_5": "Do not leak held-out constructions into training"
+  },
+  "braille_encoding": {
+    "symbol_space": 256,
+    "bits_per_cell": 8,
+    "positions": [1, 2, 3, 4, 5, 6, 7, 8],
+    "description": "Each position can be on/off, yielding 2^8 = 256 unique symbols",
+    "encoding_scheme": "Deterministic hash-based mapping from ASCII to 8-bit cells"
+  }
+}

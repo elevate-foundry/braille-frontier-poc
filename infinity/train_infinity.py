@@ -30,7 +30,7 @@ data_volume = modal.Volume.from_name("braille-training-data", create_if_missing=
     },
 )
 def train_infinity(
-    data_path: str = "/data/braille_train.pt",
+    data_path: str = "/data/frontier_train.pt",
     epochs: int = 100,
     expand_every: int = 5000,
     mine_every: int = 10000,

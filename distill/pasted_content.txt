@@ -1,0 +1,239 @@
+Below is a **builder-grade prompt** you can hand directly to Manus. It is explicit, test-driven, and avoids theoretical fluff. It tells Manus *what to build*, *what not to build*, and *how success will be measured*.
+
+---
+
+### BUILDER PROMPT: CORPUS CONSTRUCTION FOR INFINITY / BRAILLE MODEL
+
+**Objective**
+Build a **targeted, adversarial training corpus** that can falsify or validate whether a dynamic-vocabulary, contraction-learning language model is learning **operators and structure** rather than memorizing surface strings.
+
+This corpus is **not** about coverage or scale. It is about *controlled diversity*, *held-out generalization*, and *morphological stress tests*.
+
+---
+
+## 1. Design Principles (Non-Negotiable)
+
+1. **No genre monoculture**
+
+   * Avoid children’s stories, single-register prose, or templated narratives.
+   * No single source dominating more than 10–15% of tokens.
+
+2. **Structure over semantics**
+
+   * Prefer data that exposes **morphology, scope, agreement, composition**, not factual knowledge.
+
+3. **Adversarial splits**
+
+   * Every major structure must have:
+
+     * seen tokens
+     * unseen combinations
+
+4. **Evaluation-driven**
+
+   * Corpus must support:
+
+     * held-out constructions
+     * macro ablation tests
+     * surface re-encoding tests
+
+---
+
+## 2. Corpus Components (Required)
+
+### A. Synthetic Morphology Engine (Core)
+
+Build a generator that produces text from:
+
+* **Roots**
+* **Feature bundles** (tense, number, class, aspect, polarity, role)
+
+Implement at least:
+
+1. **Concatenative morphology**
+
+   * prefix / suffix stacking
+   * transparent morpheme boundaries
+
+2. **Agglutinative morphology**
+
+   * long linear stacks
+   * consistent morpheme order
+
+3. **Fusional morphology**
+
+   * merged feature realizations
+   * ambiguity at surface level
+
+4. **Templatic (non-concatenative) morphology**
+
+   * consonantal roots
+   * interleaved vowel / pattern templates
+   * *must require non-local binding*
+
+**Critical requirement**
+
+* Hold out specific feature combinations at train time.
+* Test on unseen combinations using the same roots.
+
+Output both:
+
+* surface form
+* latent structure annotation (for evaluation only, not model input).
+
+---
+
+### B. Natural Language Stressors (English First)
+
+Curate English text across **distinct structural regimes**:
+
+1. **Dialogues**
+
+   * turn-taking
+   * pronoun reference
+   * ellipsis
+
+2. **Instructions / procedures**
+
+   * imperative mood
+   * ordered steps
+   * conditional branching
+
+3. **Logical / conditional text**
+
+   * if / unless / only if
+   * negation scope
+   * counterfactuals
+
+4. **Temporal reordering**
+
+   * non-linear narratives
+   * flashbacks
+   * before/after inversions
+
+5. **Lists and tables rendered as text**
+
+   * parallel structure
+   * implicit grouping
+
+For each category:
+
+* create paraphrase variants
+* alter surface markers while preserving structure
+
+---
+
+### C. Minimal Multilingual Injection (Not Broad)
+
+Pick **one** morphologically rich language:
+
+* Turkish **or**
+* Finnish **or**
+* a controlled templatic toy language
+
+Requirements:
+
+* Parallel meaning content with English
+* Different surface realization
+* No explicit language tags during training
+
+Goal:
+
+* force discovery of **different contraction regimes** without supervision
+
+---
+
+### D. Surface Perturbation Layer (Adversarial)
+
+For a subset of the corpus, generate **equivalent re-encodings**:
+
+* different token boundaries
+* altered punctuation
+* renamed entities
+* reordered but equivalent phrases
+
+These should:
+
+* preserve meaning
+* destroy naïve n-gram shortcuts
+
+---
+
+## 3. Corpus Size Targets (Rough)
+
+* Synthetic morphology: 20–30%
+* English structural stressors: 40–50%
+* Multilingual / templatic: 10–15%
+* Perturbed / adversarial variants: 10–15%
+
+Total size can be **small** (tens of millions of tokens).
+Quality > quantity.
+
+---
+
+## 4. Required Metadata (Do Not Skip)
+
+Each sample should include:
+
+* source category
+* structural type (for eval)
+* whether it participates in a held-out split
+* whether it has surface variants
+
+This metadata is **not** for training, only for evaluation.
+
+---
+
+## 5. Explicit Anti-Goals (Do NOT Do)
+
+* Do not scrape the open web blindly
+* Do not include large factual corpora (Wikipedia, books)
+* Do not optimize for perplexity
+* Do not pre-tokenize or pre-contract
+* Do not leak held-out constructions into training
+
+---
+
+## 6. Success Criteria (How We Know This Worked)
+
+This corpus is successful if it enables us to measure:
+
+1. Whether learned contractions:
+
+   * generalize across roots
+   * survive macro ablation
+   * reduce sequence length *without* memorization
+
+2. Whether loss stays low on:
+
+   * unseen feature combinations
+   * surface-perturbed variants
+
+3. Whether compression plateaus naturally
+
+   * without vocab explosion
+   * without collapse to a few macros
+
+If the corpus cannot falsify the hypothesis, it has failed.
+
+---
+
+## 7. Deliverables
+
+1. Corpus generator code (deterministic, seedable)
+2. Generated datasets (train / eval / adversarial)
+3. Clear README explaining:
+
+   * what each split tests
+   * how failure should look
+4. A minimal evaluation script for:
+
+   * macro masking
+   * held-out composition loss
+
+---
+
+**End goal**
+This corpus should make it *easy* to prove the model is wrong — and only hard to prove it is right.
+
+If the model survives this corpus, the claims are worth taking seriously.
