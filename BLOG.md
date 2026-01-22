@@ -1,6 +1,6 @@
-# Is Dynamic Vocabulary the Next Step After BPE?
+# What I Learned By Getting Dynamic Vocabulary Wrong
 
-*TL;DR: We built a language model that learns its own vocabulary during training. It beats BPE by 2.4-3x on loss and runs 25% faster at inference. The advantage grows with scale.*
+*TL;DR: We built a language model that learns its own vocabulary during training. Initial results looked amazing—2.4x better loss! Then we measured it correctly and discovered we'd made a fundamental error. Here's what went wrong and what it teaches us about ML evaluation.*
 
 ---
 
@@ -31,95 +31,104 @@ Here's how it works:
 
 The key insight: re-tokenization creates an immediate benefit. If "the" becomes a single token, every sequence with "the" gets shorter. Shorter sequences are easier to model.
 
-## The Results
+## The Initial Results (What We Thought We Found)
 
-We ran a head-to-head comparison: same architecture, same data, same compute. Only difference is tokenization.
+We ran a head-to-head comparison: same architecture, same data, same compute.
 
-### At 58M Parameters
-
-| Metric | Infinity | BPE | Winner |
+| Metric | Infinity | BPE | Apparent Winner |
 |--------|----------|-----|--------|
-| **Loss** | 0.067 | 0.163 | Infinity (2.4x better) |
-| **Compression** | 2.19x | 1.71x | Infinity (28% better) |
-| **Inference Speed** | 349 chars/s | 281 chars/s | Infinity (25% faster) |
+| **Loss** | 0.067 | 0.163 | Infinity (2.4x better!) |
+| **Compression** | 2.19x | 1.71x | Infinity |
 
-### At 1.6B Parameters
+At 1.6B parameters, the advantage grew to 3x. We were excited.
 
-| Metric | Infinity | BPE | Winner |
-|--------|----------|-----|--------|
-| **Loss** | 0.081 | 0.246 | Infinity (3.0x better) |
+## Then Someone Asked the Right Question
 
-The advantage **increased** at scale. At 1.6B parameters, Infinity achieves 3x lower loss than BPE.
+A reviewer pointed out: **"You're comparing apples to oranges."**
 
-## Does It Actually Learn, or Just Memorize?
+Cross-entropy loss is computed *per token*. If Infinity uses fewer tokens (due to compression), of course the loss looks better—you're making fewer predictions!
 
-This is the critical question. A model could achieve low loss by memorizing training data. To test this, we created adversarial evaluation splits that require structural understanding.
+The correct metric is **Bits Per Character (BPC)**, which normalizes by the actual text length:
 
-Results:
-
-| Split | Loss Ratio |
-|-------|------------|
-| Training data | 1.00x |
-| Variants (surface changes) | 1.03x |
-| Adversarial (structural) | 1.04x |
-
-If the model was memorizing, adversarial loss would be much higher. The near-identical ratios prove it's learning **structure**, not surface patterns.
-
-## The Trade-off
-
-Nothing is free. Infinity's training is 2-3x slower because:
-- Re-tokenization takes time
-- Sequences start longer before compression kicks in
-- The hybrid embedding is slightly more complex
-
-But for deployment, what matters is inference speed and model quality. Infinity wins on both.
-
-## Why Does This Work?
-
-Three reasons:
-
-1. **Adaptive compression**: Patterns that matter to the model get compressed. BPE compresses patterns that were frequent in a separate corpus.
-
-2. **Geometric prior**: Each token has an 8-bit structure that provides inductive bias. Even new tokens inherit compositional structure from their components.
-
-3. **Virtuous cycle**: Better compression → shorter sequences → easier modeling → better representations → better compression decisions.
-
-## What's Next?
-
-This is a proof of concept. Open questions:
-
-- Does it scale to 7B+? (Probably, given the scaling trend)
-- Does it work on code? (Likely, since code has strong patterns)
-- Can we make training faster? (Yes, with better re-tokenization scheduling)
-
-## Try It Yourself
-
-All code is open source: [github.com/elevate-foundry/braille-frontier-poc](https://github.com/elevate-foundry/braille-frontier-poc)
-
-```bash
-# Train Infinity model
-modal run infinity/train_infinity.py --epochs 50
-
-# Train BPE baseline
-modal run baseline/train_bpe_baseline.py --epochs 50
-
-# Compare inference speed
-modal run baseline/benchmark_inference.py
+```
+BPC = total_loss / (total_characters × ln(2))
 ```
 
+## The Real Results
+
+We computed BPC. The results were... not what we expected.
+
+| Model | BPC | Per-char Perplexity |
+|-------|-----|---------------------|
+| **BPE** | 0.14 | 1.10 |
+| **Infinity** | 33.92 | 16,000,000,000+ |
+
+**Infinity was performing worse than random chance.**
+
+## What Went Wrong?
+
+Investigation revealed multiple compounding failures:
+
+### 1. Tokenization State Mismatch
+
+During training, we re-tokenized data whenever new contractions were discovered. But we didn't save the exact tokenization state with the checkpoint.
+
+When evaluating, we re-tokenized from scratch—but the model's weights were tuned for a *different* tokenization that no longer existed.
+
+### 2. "Compression" Was Actually Expansion
+
+The reported "2.19 chars/token" compression was measured during training. When we re-tokenized for evaluation, we got **0.48 chars/token**—the sequences were actually *longer* than the original.
+
+### 3. Positional Chaos
+
+Every time we re-tokenized, the positional relationships changed. Token 5 might become token 3. The attention patterns the model learned became meaningless.
+
+### 4. Tiny Dataset
+
+42K samples for a 1.6B parameter model? The model could memorize the entire dataset. We weren't testing generalization at all.
+
+## The Lessons
+
+### 1. Always Use BPC for Tokenization Comparisons
+
+Per-token loss is meaningless when comparing different tokenization schemes. This should have been obvious, but we got excited by good-looking numbers.
+
+### 2. Save Your Tokenization State
+
+If vocabulary changes during training, you MUST save the exact token-to-pattern mapping. Otherwise evaluation is impossible.
+
+### 3. Re-tokenization Is Dangerous
+
+Changing the input distribution mid-training causes instability. We saw 15x loss spikes after vocabulary expansion. The model never fully recovered.
+
+### 4. Small Datasets Prove Nothing
+
+You can't validate language modeling claims on 42K samples. Period.
+
+## Is Dynamic Vocabulary Still Worth Exploring?
+
+**Yes, but not like this.**
+
+The core idea—that vocabulary should evolve with the model—is still theoretically appealing. But a proper implementation would need:
+
+- Correct evaluation metrics from day one
+- Careful state management
+- Web-scale data
+- Strategies for positional stability (maybe RoPE or ALiBi)
+- Gradual token introduction with embedding warmup
+
+## The Real Bottom Line
+
+We thought we'd found the next step after BPE. We hadn't.
+
+But we learned something more valuable: **how easy it is to fool yourself with the wrong metrics.**
+
+The exciting-looking results (2.4x better!) were an artifact of comparing incomparable numbers. The moment we used the right metric, the illusion collapsed.
+
+This is why rigorous evaluation matters. This is why peer review matters. This is why you should always ask: "Am I measuring what I think I'm measuring?"
+
 ---
 
-## The Bottom Line
+*Built with Modal, PyTorch, and a healthy dose of humility.*
 
-BPE was a great idea in 2016. But freezing vocabulary before training is a fundamental limitation. Dynamic vocabulary expansion shows that we can do better:
-
-- **2.4-3x lower loss**
-- **25% faster inference**
-- **Learns structure, not surface forms**
-- **Advantage grows with scale**
-
-Is this the next step after BPE? The evidence says yes.
-
----
-
-*Built with Modal (cloud GPUs), PyTorch, and a lot of curiosity about whether tokenization could be better.*
+**Code**: [github.com/elevate-foundry/braille-frontier-poc](https://github.com/elevate-foundry/braille-frontier-poc)

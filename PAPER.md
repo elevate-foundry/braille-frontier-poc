@@ -1,6 +1,8 @@
-# Dynamic Vocabulary Expansion: A Step Beyond BPE
+# Dynamic Vocabulary Expansion: An Experimental Investigation
 
-**Abstract**: We present Infinity, a language model architecture that dynamically expands its vocabulary during training by discovering and promoting frequent n-gram patterns. In head-to-head comparisons against BPE tokenization on identical architectures and data, Infinity achieves 2.4-3.0x lower loss across model scales from 58M to 1.6B parameters. We demonstrate that Infinity learns structural patterns rather than memorizing surface forms, generalizing to adversarial perturbations with only 3-4% loss increase. At inference time, Infinity's higher compression ratio translates to 25% faster effective throughput at the 58M scale.
+**Abstract**: We present Infinity, a language model architecture that dynamically expands its vocabulary during training by discovering and promoting frequent n-gram patterns. While initial experiments showed promising per-token loss improvements, rigorous evaluation using Bits Per Character (BPC) revealed fundamental methodological flaws. This paper documents both the architectural innovations and the critical lessons learned about evaluating dynamic tokenization systems.
+
+**Status**: This is an experimental proof-of-concept with significant limitations. The core hypothesis—that dynamic vocabulary can outperform static BPE—remains unproven due to evaluation challenges documented in Section 6.
 
 ## 1. Introduction
 
@@ -83,25 +85,23 @@ Both Infinity and BPE baselines use identical transformer architectures (RMSNorm
 - **Epochs**: 50 (58M) or 20 (1.6B)
 - **Batch size**: 64 effective (with gradient accumulation)
 
-## 4. Results
+## 4. Initial Results (Per-Token Loss)
 
-### 4.1 Training Loss
+### 4.1 Training Loss (Flawed Metric)
 
-| Scale | Infinity Loss | BPE Loss | Improvement |
+| Scale | Infinity Loss | BPE Loss | Apparent Improvement |
 |-------|--------------|----------|-------------|
-| **58M** | 0.067 | 0.163 | **2.4x** |
-| **1.6B** | 0.081 | 0.246 | **3.0x** |
+| **58M** | 0.067 | 0.163 | 2.4x |
+| **1.6B** | 0.081 | 0.246 | 3.0x |
 
-**Key finding**: Infinity's advantage *increases* with scale. At 1.6B parameters, Infinity achieves 3x lower loss than BPE.
+**⚠️ WARNING**: These results are **not directly comparable**. Cross-entropy loss is computed per-token, and the tokenization schemes produce different numbers of tokens. See Section 6 for the correct comparison.
 
-### 4.2 Compression
+### 4.2 Reported Compression
 
 | Scale | Infinity | BPE |
 |-------|----------|-----|
 | **58M** | 2.19 chars/token | 1.71 chars/token |
 | **1.6B** | 1.68 chars/token | 1.71 chars/token |
-
-The 58M model achieved higher compression because it trained longer with more vocabulary expansion cycles. The 1.6B model's compression could likely improve with extended training.
 
 ### 4.3 Generalization (58M)
 
@@ -111,29 +111,16 @@ The 58M model achieved higher compression because it trained longer with more vo
 | Variants | 7.10 | 1.03x |
 | Adversarial | 7.21 | 1.04x |
 
-The near-identical ratios demonstrate that Infinity learns **structural patterns**, not surface forms. A memorizing model would show significantly higher loss on adversarial splits.
+The near-identical ratios suggest structural learning, though this evaluation also uses per-token loss.
 
-### 4.4 Inference Speed (58M)
-
-| Metric | Infinity | BPE | Winner |
-|--------|----------|-----|--------|
-| Tokens/second | 159.7 | 164.2 | BPE (3% faster) |
-| **Chars/second** | 349.7 | 280.8 | **Infinity (25% faster)** |
-| Memory | 0.91 GB | 0.89 GB | ~Same |
-
-Per-token, BPE is slightly faster due to simpler embedding lookup. But Infinity produces more text per second because each token represents more characters.
-
-### 4.5 Training Time
+### 4.4 Training Time
 
 | Scale | Infinity | BPE |
 |-------|----------|-----|
 | **58M** | 35 min | 19 min |
 | **1.6B** | 141 min | 42 min |
 
-Infinity's training is slower due to:
-1. Re-tokenization overhead after vocabulary expansion
-2. Hybrid embedding computation
-3. Longer sequences before compression kicks in
+Infinity's training is 2-3x slower due to re-tokenization overhead.
 
 ## 5. Analysis
 
@@ -164,33 +151,118 @@ The increasing advantage at scale (2.4x → 3.0x) suggests that:
 2. The geometric prior becomes more valuable with capacity
 3. Re-tokenization provides compounding benefits
 
-## 6. Limitations
+## 6. Critical Evaluation: Bits Per Character
 
-1. **Training overhead**: 2-3x slower training due to re-tokenization
-2. **Compression variance**: Compression ratio depends on training duration and expansion schedule
-3. **Dataset size**: Our experiments used relatively small datasets; scaling to web-scale data is untested
-4. **Layer 3 unused**: Semantic-level tokens were not implemented in this work
+After initial experiments, we conducted a rigorous evaluation using **Bits Per Character (BPC)**, the correct metric for comparing models with different tokenization schemes.
 
-## 7. Future Work
+### 6.1 Why BPC Matters
 
-1. **Larger scale**: Test at 7B+ parameters with web-scale data
-2. **Layer 3 implementation**: Add concept-level tokens for even higher compression
-3. **Code corpora**: Test if contractions generalize to programming languages
-4. **Adaptive expansion**: Learn when and how aggressively to expand vocabulary
-5. **Inference optimization**: Speculative decoding with contraction-aware sampling
+Cross-entropy loss is computed **per token**. If Model A uses 1000 tokens and Model B uses 500 tokens for the same text, their losses are not directly comparable. BPC normalizes by the number of characters:
 
-## 8. Conclusion
+```
+BPC = total_cross_entropy / (total_characters × ln(2))
+```
 
-We presented Infinity, a language model architecture that dynamically expands its vocabulary during training. In controlled experiments:
+### 6.2 BPC Results
 
-- **2.4-3.0x lower loss** than BPE across scales
-- **25% faster inference** (effective throughput) at 58M scale
-- **Learns structure**, not surface forms (generalizes to adversarial splits)
-- **Advantage increases with scale**
+| Model | BPC | Per-char Perplexity |
+|-------|-----|---------------------|
+| **BPE** | 0.14 | 1.10 |
+| **Infinity** | 33.92 | 16B+ |
 
-The key insight is that vocabulary and model should co-evolve: patterns that become important during training should be compressed, creating a virtuous cycle of better representations enabling better compression enabling better representations.
+**This is a catastrophic result for Infinity.** A BPC of 33.92 indicates the model is performing worse than random chance.
 
-While training is slower, the deployment benefits (lower loss, faster inference) make Infinity a promising direction for next-generation language models.
+### 6.3 Root Cause Analysis
+
+Investigation revealed multiple compounding issues:
+
+1. **Tokenization Mismatch**: The model was trained on data that was re-tokenized during training, but evaluation used freshly tokenized data. The model's weights are tuned for a specific tokenization state that cannot be reproduced.
+
+2. **Negative Compression**: The "compression ratio" of 0.48 chars/token means sequences are actually **expanding**, not compressing. The contractions contain high-byte Braille patterns that don't match the evaluation data.
+
+3. **Non-Stationary Training**: Re-tokenization mid-training creates distribution shift. The model must re-learn positional relationships after each vocabulary expansion.
+
+4. **Checkpoint State**: The saved model checkpoint doesn't include the exact tokenization state used during training, making reproducible evaluation impossible.
+
+### 6.4 What the Per-Token Loss Actually Measured
+
+The low per-token loss (0.067) was likely measuring:
+- Overfitting to the specific tokenization state at training end
+- Shorter sequences (after compression) being easier to model
+- NOT generalizable language modeling capability
+
+## 7. Lessons Learned
+
+### 7.1 Evaluation Must Use BPC
+
+Any comparison across tokenization schemes **must** use Bits Per Character or Bits Per Byte. Per-token metrics are fundamentally incomparable.
+
+### 7.2 Dynamic Tokenization Requires Careful State Management
+
+If vocabulary changes during training:
+- The final tokenization state must be saved with the checkpoint
+- Evaluation must use the exact same tokenization
+- Positional embeddings may need special handling during transitions
+
+### 7.3 Re-tokenization Creates Instability
+
+We observed loss spikes of 15x (0.08 → 1.25) after vocabulary expansion. Strategies to mitigate:
+- Gradual introduction of new tokens
+- Learning rate warmup after expansion
+- Freezing new token embeddings initially
+
+### 7.4 Synthetic Data Limitations
+
+42K samples is insufficient to validate claims about language modeling. The 1.6B model (with 1.6B parameters) can trivially memorize this dataset.
+
+## 8. Revised Limitations
+
+1. **Evaluation is broken**: BPC shows Infinity performs catastrophically worse than BPE
+2. **Training overhead**: 2-3x slower with no proven benefit
+3. **State management**: Cannot reproduce training tokenization for evaluation
+4. **Dataset scale**: Results on 42K samples don't generalize
+5. **Positional instability**: Re-tokenization disrupts learned attention patterns
+
+## 9. Future Work: What Would Be Needed
+
+To properly test the dynamic vocabulary hypothesis:
+
+1. **Save tokenization state**: Checkpoint must include the exact token-to-pattern mapping used for training data
+2. **Use BPC from the start**: Track bits-per-character during training, not just per-token loss
+3. **Larger dataset**: Minimum 1B tokens to avoid memorization at 1B+ parameter scale
+4. **Positional embedding strategies**: Test relative positional encodings (RoPE, ALiBi) which may be more robust to sequence length changes
+5. **Gradual expansion**: Introduce new tokens slowly with embedding warmup
+
+## 10. Conclusion
+
+We presented Infinity, a language model architecture that dynamically expands its vocabulary during training. The core hypothesis—that vocabulary should co-evolve with the model—remains theoretically appealing.
+
+However, **rigorous evaluation revealed fundamental flaws**:
+
+| Claim | Reality |
+|-------|---------|
+| "2.4-3x lower loss" | Incomparable metric (per-token vs per-token) |
+| "25% faster inference" | Based on flawed compression measurement |
+| "Learns structure" | Cannot verify without proper BPC evaluation |
+
+**The actual BPC comparison shows Infinity performing catastrophically worse than BPE** (33.92 vs 0.14).
+
+### What We Learned
+
+1. **Never compare per-token loss across tokenization schemes** - use BPC
+2. **Dynamic tokenization requires careful state management** - save the exact tokenization with checkpoints
+3. **Re-tokenization mid-training causes instability** - needs mitigation strategies
+4. **Small synthetic datasets prove nothing** - need web-scale evaluation
+
+### The Hypothesis Remains Open
+
+The idea that vocabulary should be learned during training, not frozen beforehand, is still worth exploring. But this implementation does not prove it works. A proper test would require:
+- Correct evaluation metrics (BPC)
+- Proper state management
+- Web-scale data
+- Strategies for positional stability
+
+This paper serves as a cautionary tale about the importance of rigorous evaluation in ML research.
 
 ---
 
