@@ -1,0 +1,66 @@
+{
+  "spec": "BIFM-MANIFEST/1.0",
+  "repo": "braille-frontier-poc",
+  "owner": "elevate-foundry",
+  "generatedAt": "2026-06-10T03:59:10.573Z",
+  "topology": {
+    "org": "https://github.com/elevate-foundry",
+    "index": "CONSTELLATION.md",
+    "peers": [
+      "New-project",
+      "ai-native-ide",
+      "artificial-cerebellar-loop",
+      "bbid-challenge",
+      "bbid-spec",
+      "black-box",
+      "braille",
+      "braille-mcp",
+      "braille-multimodal-substrate",
+      "braille-space-agi",
+      "data-moat-thesis",
+      "dynworker",
+      "embodied-intelligence-ai",
+      "frontier-llm",
+      "ghost-qa",
+      "gods-as-centroids",
+      "hilbert-ide",
+      "lm-training-infra",
+      "modulo8-semantic-compression",
+      "pluribus",
+      "pluribus-swarm",
+      "qwen-agent",
+      "sal-auth",
+      "sal-llm",
+      "sal-voice",
+      "salutations",
+      "speculative-agent",
+      "tool-algebra-plugin"
+    ]
+  },
+  "state": {
+    "commits": 11,
+    "createdAt": "2026-01-21T13:03:34Z",
+    "pushedAt": "2026-01-22T13:17:12Z",
+    "language": "Python",
+    "bifm256": {
+      "byte": 102,
+      "cell": "⡦",
+      "kappa": 3,
+      "sigma": 1,
+      "delta": 2,
+      "words": "notable change, calm volatility, drifting drift"
+    }
+  },
+  "terms": {
+    "license": "see LICENSE",
+    "aiTraining": "contact-required",
+    "attribution": "required",
+    "contact": "https://github.com/elevate-foundry"
+  },
+  "verification": {
+    "algorithm": "ed25519",
+    "publicKey": "MCowBQYDK2VwAyEAWbqUXevnp2K8P2DDPM0i5iihVNRjjvp19t5LwWonzwU=",
+    "digest": "caf923d6eb6492ed5fd6c438ec23eaf10ebc31d8311fa261998201e67184b47c",
+    "signature": "0C+YCOU/EUGaCa6K8BXH0au2wvVx3RAfimQEhGBL1+eDlFNyrEDFw7cBeyCGok/m01nfCzQSyPHQ4zk1D+tEDw=="
+  }
+}
