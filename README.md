@@ -139,3 +139,17 @@ modal run baseline/benchmark_inference.py
 ## License
 
 MIT
+
+<!-- ELEVATE:BEGIN (auto-generated section; edits here are overwritten) -->
+## About
+
+| | |
+| --- | --- |
+| **Description** | Proof-of-concept language model using Braille encoding for reduced vocabulary size |
+| **Language** | Python |
+| **Commits** | 11 |
+| **Created** | 2026-01-21 |
+| **Last push** | 2026-01-22 |
+
+Part of [**elevate-foundry**](https://github.com/elevate-foundry) · [repository](https://github.com/elevate-foundry/braille-frontier-poc)
+<!-- ELEVATE:END -->
